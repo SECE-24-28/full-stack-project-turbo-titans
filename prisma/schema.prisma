@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  SELLER
+  BUYER
+}
+
+model User {
+  id               String    @id @default(uuid())
+  name             String
+  email            String    @unique
+  password         String
+  role             Role      @default(BUYER)
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  products         Product[]
+  orders           Order[]
+  wishlistItems    WishlistItem[]
+  cartItems        CartItem[]
+}
+
+enum ProductStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Product {
+  id              String        @id @default(uuid())
+  sellerId        String
+  seller          User          @relation(fields: [sellerId], references: [id])
+  
+  // 1. Basic Info
+  name            String
+  brand           String
+  modelNumber     String
+  series          String?
+  description     String
+  
+  // 2. Specifications
+  processor       String
+  ram             String
+  storage         String
+  graphics        String
+  displaySize     String
+  displayRes      String
+  os              String
+  battery         String?
+  
+  // 3. Pricing & Stock
+  price           Float
+  stock           Int
+  
+  // 4. Images
+  images          String[]
+  
+  // 5. Warranty
+  warrantyPeriod  String?
+  warrantyType    String?
+  
+  // 6. Promotional Discounts
+  discountPercent Int           @default(0)
+  
+  status          ProductStatus @default(PENDING)
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  orderItems      OrderItem[]
+  wishlistItems   WishlistItem[]
+  cartItems       CartItem[]
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  buyerId     String
+  buyer       User        @relation(fields: [buyerId], references: [id])
+  totalAmount Float
+  status      OrderStatus @default(PENDING)
+  
+  // Shipping info could go here later
+  
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  items       OrderItem[]
+}
+
+model OrderItem {
+  id          String    @id @default(uuid())
+  orderId     String
+  order       Order     @relation(fields: [orderId], references: [id])
+  
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+  
+  sellerId    String
+  // Relation to seller so we can easily query analytics per seller
+  
+  quantity    Int
+  priceAtTime Float     // The price they actually paid (after discounts)
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model WishlistItem {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+}
+
+model CartItem {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  quantity  Int      @default(1)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, productId])
+}
