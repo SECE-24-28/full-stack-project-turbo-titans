@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useQuery, useMutation, gql } from "@apollo/client";
 import { Heart, HeartCrack, ShoppingCart, Trash2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const GET_WISHLIST = gql`
   query GetWishlist {
@@ -48,17 +49,17 @@ export default function WishlistPage() {
       await toggleWishlist({ variables: { productId } });
       refetch(); // Refresh the wishlist data
     } catch (err: any) {
-      alert("Failed to remove item: " + err.message);
+      toast.error("Failed to remove item: " + err.message);
     }
   };
 
   const handleAddToCart = async (productId: string) => {
     try {
       await addToCart({ variables: { productId } });
-      alert("Added to cart successfully!");
+      toast.success("Added to cart successfully!");
       window.location.reload(); 
     } catch (err: any) {
-      alert("Failed to add to cart: " + err.message);
+      toast.error("Failed to add to cart: " + err.message);
     }
   };
 

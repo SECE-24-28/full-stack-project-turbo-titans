@@ -80,16 +80,16 @@ export default function AdminDashboardPage() {
           <p className="text-muted-foreground">Monitor the pulse of Lap Mart in real-time.</p>
         </div>
         <div className="flex gap-3">
-          <Button asChild>
-            <Link href="/dashboard/admin/approvals">
+          <Link href="/dashboard/admin/approvals" className="block">
+            <Button>
               Review Approvals
               {stats.pendingApprovals > 0 && (
                 <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
                   {stats.pendingApprovals}
                 </span>
               )}
-            </Link>
-          </Button>
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -233,12 +233,12 @@ export default function AdminDashboardPage() {
                 )}
               </div>
               
-              <Button variant="ghost" asChild className="w-full mt-6 text-muted-foreground group">
-                <Link href="/dashboard/admin/logs">
+              <Link href="/dashboard/admin/logs" className="block w-full mt-6">
+                <Button variant="ghost" className="w-full text-muted-foreground group">
                   View All Logs
                   <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                </Link>
-              </Button>
+                </Button>
+              </Link>
             </CardContent>
           </Card>
         </div>

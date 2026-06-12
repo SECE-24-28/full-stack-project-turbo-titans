@@ -2,22 +2,37 @@
 
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 
-const data = [
-  { name: "Jan", total: 0 },
-  { name: "Feb", total: 0 },
-  { name: "Mar", total: 0 },
-  { name: "Apr", total: 0 },
-  { name: "May", total: 0 },
-  { name: "Jun", total: 0 },
-  { name: "Jul", total: 0 },
-  { name: "Aug", total: 0 },
-  { name: "Sep", total: 0 },
-  { name: "Oct", total: 0 },
-  { name: "Nov", total: 0 },
-  { name: "Dec", total: 0 },
-];
+interface SalesChartProps {
+  data: {
+    name: string;
+    total: number;
+    orders: number;
+  }[];
+}
 
-export function SalesChart() {
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="rounded-lg border bg-card p-3 shadow-sm min-w-[120px]">
+        <p className="text-sm font-medium text-muted-foreground mb-2 pb-2 border-b">{label}</p>
+        <div className="space-y-1">
+          <p className="text-sm font-bold text-primary flex justify-between">
+            <span>Sales:</span> 
+            <span>₹{data.total.toLocaleString('en-IN')}</span>
+          </p>
+          <p className="text-sm font-medium text-muted-foreground flex justify-between">
+            <span>Orders:</span> 
+            <span>{data.orders} {data.orders === 1 ? 'laptop' : 'laptops'}</span>
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+export function SalesChart({ data }: SalesChartProps) {
   return (
     <ResponsiveContainer width="100%" height={350}>
       <BarChart data={data}>
@@ -35,7 +50,7 @@ export function SalesChart() {
           axisLine={false}
           tickFormatter={(value) => `₹${value}`}
         />
-        <Tooltip cursor={{ fill: "var(--accent)" }} />
+        <Tooltip cursor={{ fill: "var(--accent)" }} content={<CustomTooltip />} />
         <Bar
           dataKey="total"
           fill="currentColor"

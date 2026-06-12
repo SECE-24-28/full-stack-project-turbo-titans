@@ -11,7 +11,8 @@ import {
   PlusCircle, 
   BarChart,
   CheckCircle,
-  Activity
+  Activity,
+  Layers
 } from "lucide-react";
 
 const ME_QUERY = gql`
@@ -65,6 +66,14 @@ export default function DashboardLayout({
               <Link href="/dashboard/admin/logs" className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground ${pathname.includes('/logs') ? 'bg-accent text-accent-foreground' : ''}`}>
                 <Activity className="h-4 w-4" />
                 System Logs
+              </Link>
+              <Link href="/dashboard/admin/orders" className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground ${pathname.includes('/orders') ? 'bg-accent text-accent-foreground' : ''}`}>
+                <Package className="h-4 w-4" />
+                Order Fulfillment
+              </Link>
+              <Link href="/dashboard/admin/inventory" className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground ${pathname.includes('/inventory') ? 'bg-accent text-accent-foreground' : ''}`}>
+                <Layers className="h-4 w-4" />
+                Live Inventory
               </Link>
             </div>
           ) : role === 'SELLER' ? (

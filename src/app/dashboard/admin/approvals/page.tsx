@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Check, X, AlertCircle, ArrowRight } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const GET_PENDING_PRODUCTS = gql`
   query GetPendingProducts {
@@ -48,7 +49,7 @@ export default function AdminApprovalsPage() {
       await updateStatus({ variables: { id, status } });
       refetch();
     } catch (err: any) {
-      alert("Failed to update status: " + err.message);
+      toast.error("Failed to update status: " + err.message);
     }
   };
 

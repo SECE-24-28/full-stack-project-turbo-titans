@@ -1,12 +1,18 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { ArrowRight, Cpu, Shield, Zap, Star, Heart, Package } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  ArrowRight, Shield, Zap, Heart, Package, Flame, Clock, 
+  Gamepad2, Briefcase, Palette, GraduationCap, Truck, CreditCard, RotateCcw,
+  Cpu, Sparkles, Scan
+} from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
-
 import { useQuery, useMutation, gql } from "@apollo/client";
+import { toast } from "sonner";
+import { LuxuryCard } from "@/components/ui/luxury-card";
 
 const GET_PUBLIC_PRODUCTS = gql`
   query GetPublicProducts {
@@ -20,6 +26,22 @@ const GET_PUBLIC_PRODUCTS = gql`
       price
       discountPercent
       images
+      createdAt
+    }
+  }
+`;
+
+const GET_MY_ORDERS = gql`
+  query GetMyOrders {
+    getMyOrders {
+      id
+      items {
+        product {
+          brand
+          processor
+          ram
+        }
+      }
     }
   }
 `;
@@ -44,38 +66,77 @@ const ADD_TO_CART = gql`
   }
 `;
 
-const features = [
+const heroSlides = [
   {
-    icon: <Cpu className="h-6 w-6 text-primary" />,
-    title: "Latest Processors",
-    description: "Discover laptops with the newest and most powerful chips for extreme performance.",
+    title: "The Ultimate Gaming Experience",
+    subtitle: "Level up your gameplay with the latest RTX 40-Series laptops.",
+    image: "https://images.unsplash.com/photo-1603302576837-37561b2e2302?q=80&w=1200&auto=format&fit=crop",
+    gradient: "from-premium-violet/50 to-electric-blue/50"
   },
   {
-    icon: <Zap className="h-6 w-6 text-primary" />,
-    title: "Fast Delivery",
-    description: "Get your new laptop delivered securely and quickly right to your doorstep.",
-  },
-  {
-    icon: <Shield className="h-6 w-6 text-primary" />,
-    title: "Buyer Protection",
-    description: "Every purchase is protected with our comprehensive warranty and return policy.",
-  },
+    title: "Unleash Your Creativity",
+    subtitle: "Color-accurate OLED displays and massive power for creators.",
+    image: "https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?q=80&w=1200&auto=format&fit=crop",
+    gradient: "from-electric-blue/50 to-teal-600/50"
+  }
 ];
 
 export default function Home() {
-  const { data, loading, error } = useQuery(GET_PUBLIC_PRODUCTS, {
-    fetchPolicy: "network-only"
-  });
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  const { data, loading, error } = useQuery(GET_PUBLIC_PRODUCTS);
 
   const { data: wishlistData, refetch: refetchWishlist } = useQuery(GET_WISHLIST, {
-    fetchPolicy: "network-only"
+    fetchPolicy: "network-only",
+    errorPolicy: "ignore"
+  });
+
+  const { data: ordersData, loading: ordersLoading } = useQuery(GET_MY_ORDERS, {
+    fetchPolicy: "network-only",
+    errorPolicy: "ignore"
   });
 
   const [toggleWishlist] = useMutation(TOGGLE_WISHLIST);
   const [addToCart] = useMutation(ADD_TO_CART);
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
+    }, 8000);
+    return () => clearInterval(timer);
+  }, []);
+
   const laptops = data?.getPublicProducts || [];
   const wishlistIds = wishlistData?.getWishlist?.map((w: any) => w.id) || [];
+  const myOrders = ordersData?.getMyOrders || [];
+
+  const discountedLaptops = [...laptops].filter(l => l.discountPercent > 0).sort((a, b) => b.discountPercent - a.discountPercent).slice(0, 4);
+  const newArrivals = [...laptops].sort((a, b) => parseInt(b.createdAt) - parseInt(a.createdAt)).slice(0, 4);
+
+  // Recommendation Engine Logic
+  let recommendations = [];
+  if (myOrders.length > 0) {
+    // Find preferred brands/specs based on previous orders
+    const preferredBrands = new Set();
+    myOrders.forEach((order: any) => {
+      order.items.forEach((item: any) => {
+        if (item.product?.brand) preferredBrands.add(item.product.brand);
+      });
+    });
+    
+    recommendations = [...laptops]
+      .filter(l => preferredBrands.has(l.brand))
+      .slice(0, 4);
+      
+    // If not enough recommendations from preferred brands, fill with random
+    if (recommendations.length < 4) {
+      const remaining = [...laptops].filter(l => !preferredBrands.has(l.brand)).slice(0, 4 - recommendations.length);
+      recommendations = [...recommendations, ...remaining];
+    }
+  } else {
+    // If no orders, just pick 4 random/top laptops
+    recommendations = [...laptops].sort(() => 0.5 - Math.random()).slice(0, 4);
+  }
 
   const handleWishlistToggle = async (productId: string) => {
     try {
@@ -83,9 +144,9 @@ export default function Home() {
       refetchWishlist();
     } catch (err: any) {
       if (err.message.includes("Not authenticated")) {
-        alert("Please log in to save items to your wishlist!");
+        toast.error("Please log in to save items to your wishlist!");
       } else {
-        alert("Failed to update wishlist");
+        toast.error("Failed to update wishlist");
       }
     }
   };
@@ -93,210 +154,220 @@ export default function Home() {
   const handleAddToCart = async (productId: string) => {
     try {
       await addToCart({ variables: { productId } });
-      alert("Added to cart successfully!");
-      // We could use Apollo client cache or refetch the navbar query here, 
-      // but reloading the page is easiest to update the navbar badge if we don't have a global state
-      // Actually, since GET_CART is a different query, it might not automatically update unless we refetch it.
-      // But we will let the navbar update on navigation or we could refresh
+      toast.success("Added to cart successfully!");
       window.location.reload(); 
     } catch (err: any) {
       if (err.message.includes("Not authenticated")) {
-        alert("Please log in to add items to your cart!");
+        toast.error("Please log in to add items to your cart!");
       } else {
-        alert("Failed to add to cart");
+        toast.error("Failed to add to cart");
       }
     }
   };
 
-  return (
-    <div className="flex flex-col min-h-screen">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden bg-background pt-16 md:pt-24 lg:pt-32 pb-16">
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
-        <div className="absolute left-0 right-0 top-0 -z-10 m-auto h-[310px] w-[310px] rounded-full bg-primary/20 opacity-50 blur-[100px]"></div>
-        
-        <div className="container relative z-10 mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-8 items-center">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="max-w-2xl"
+  const renderProductCard = (laptop: any, index: number, isDeal: boolean = false) => {
+    const isDiscounted = laptop.discountPercent > 0;
+    const salePrice = isDiscounted ? laptop.price * (1 - laptop.discountPercent / 100) : laptop.price;
+    const imageUrl = laptop.images && laptop.images.length > 0 ? laptop.images[0] : "https://images.unsplash.com/photo-1593642632823-8f785ba67e45?q=80&w=1000&auto=format&fit=crop";
+
+    return (
+      <motion.div
+        key={laptop.id}
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.6, delay: index * 0.1 }}
+      >
+        <LuxuryCard className={`h-full flex flex-col p-5 ${isDeal ? 'border-orange-500/30' : ''}`}>
+          <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-primary/10 dark:bg-deep-black/50 mb-5 flex items-center justify-center p-4">
+            <Link href={`/laptops/${laptop.id}`} className="relative w-full h-full">
+              <Image
+                src={imageUrl}
+                alt={laptop.name}
+                fill
+                className="object-contain transition-transform duration-700 group-hover:scale-110 drop-shadow-xl mix-blend-multiply dark:mix-blend-normal"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl" />
+            </Link>
+            <button 
+              onClick={(e) => { e.preventDefault(); handleWishlistToggle(laptop.id); }}
+              className="absolute top-3 right-3 bg-black/50 backdrop-blur-md rounded-full p-2.5 opacity-0 group-hover:opacity-100 transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] hover:bg-black/80 hover:scale-110 z-10"
             >
-              <h1 className="font-heading text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl text-foreground">
-                The Ultimate <br/>
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-purple-600">
-                  Laptop Marketplace
-                </span>
-              </h1>
-              <p className="mt-6 text-lg text-muted-foreground sm:text-xl">
-                Discover the best laptops for gaming, programming, and business from verified sellers. Upgrade your digital experience today.
-              </p>
-              <div className="mt-8 flex flex-col sm:flex-row gap-4">
-                <Link href="#trending" className={buttonVariants({ size: "lg", className: "rounded-full px-8" })}>
-                  Shop Now <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-                <Link href="/register" className={buttonVariants({ size: "lg", variant: "outline", className: "rounded-full px-8 bg-background/50 backdrop-blur-sm" })}>
-                  Become a Seller
-                </Link>
+              <Heart 
+                className={`h-5 w-5 transition-colors ${
+                  wishlistIds.includes(laptop.id) 
+                    ? "fill-red-500 text-red-500" 
+                    : "text-white hover:text-red-500"
+                }`} 
+              />
+            </button>
+            {isDiscounted && (
+              <div className="absolute top-3 left-3 bg-red-600/90 backdrop-blur-sm text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-[0_0_20px_rgba(220,38,38,0.5)] pointer-events-none">
+                <Flame className="h-3.5 w-3.5" />
+                {laptop.discountPercent}% OFF
               </div>
-            </motion.div>
-            
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.7, delay: 0.2 }}
-              className="relative mx-auto w-full max-w-lg lg:max-w-none"
-            >
-              <div className="relative rounded-2xl bg-card border shadow-2xl overflow-hidden glassmorphism p-2">
-                <Image
-                  src="https://images.unsplash.com/photo-1603302576837-37561b2e2302?q=80&w=1200&auto=format&fit=crop"
-                  alt="Premium Laptop"
-                  width={800}
-                  height={600}
-                  className="rounded-xl w-full object-cover"
-                  priority
-                />
-              </div>
-              {/* Floating badges */}
-              <motion.div 
-                animate={{ y: [0, -10, 0] }} 
-                transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-                className="absolute -right-4 top-10 rounded-full border bg-background/80 backdrop-blur-md px-4 py-2 shadow-lg"
-              >
-                <div className="flex items-center gap-2">
-                  <Star className="h-4 w-4 fill-primary text-primary" />
-                  <span className="text-sm font-bold">4.9/5 Rating</span>
-                </div>
-              </motion.div>
-            </motion.div>
+            )}
           </div>
-        </div>
+          <div className="flex-1 flex flex-col z-10">
+            <div className="text-xs font-bold text-primary dark:text-electric-blue mb-2 uppercase tracking-[0.2em]">{laptop.brand}</div>
+            <Link href={`/laptops/${laptop.id}`} className="hover:text-primary dark:hover:text-premium-violet transition-colors">
+              <h3 className="font-bold text-xl line-clamp-1 mb-2 tracking-tight text-foreground">{laptop.name}</h3>
+            </Link>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-5 mt-1 font-medium bg-muted/50 dark:bg-black/20 p-2 rounded-md border border-border/50 dark:border-white/5">
+              <Cpu className="h-4 w-4 text-foreground/50 dark:text-metallic-silver" />
+              <span className="line-clamp-1">{laptop.processor} • {laptop.ram} • {laptop.storage}</span>
+            </div>
+            <div className="mt-auto flex items-end justify-between pt-3 border-t border-border/50 dark:border-white/10">
+              <div className="flex flex-col">
+                {isDiscounted && (
+                  <span className="text-sm text-muted-foreground line-through decoration-red-500/50">
+                    ₹{laptop.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                )}
+                <span className={`font-black text-2xl tracking-tight ${isDeal ? 'text-orange-500' : 'text-foreground dark:text-white dark:drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]'}`}>
+                  ₹{salePrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <Button size="default" onClick={(e) => { e.preventDefault(); handleAddToCart(laptop.id); }} className="rounded-full bg-primary text-primary-foreground hover:bg-primary/90 dark:bg-white dark:text-black dark:hover:bg-metallic-silver font-bold dark:shadow-[0_0_20px_rgba(255,255,255,0.2)] transition-all hover:scale-105 active:scale-95">
+                Buy Now
+              </Button>
+            </div>
+          </div>
+        </LuxuryCard>
+      </motion.div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col min-h-screen bg-background dark:bg-deep-black text-foreground dark:text-white selection:bg-primary dark:selection:bg-electric-blue selection:text-primary-foreground dark:selection:text-white">
+      
+      {/* 1. Ultra-Premium Hero Section */}
+      <section className="relative h-[85vh] w-full overflow-hidden bg-background dark:bg-deep-black">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentSlide}
+            initial={{ opacity: 0, scale: 1.05 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1.5, ease: "easeOut" }}
+            className="absolute inset-0"
+          >
+            <Image
+              src={heroSlides[currentSlide].image}
+              alt="Hero"
+              fill
+              className="object-cover opacity-60"
+              priority
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-background/90 via-background/50 to-transparent dark:from-deep-black/90 dark:via-deep-black/50"></div>
+            <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent dark:from-deep-black"></div>
+            
+            <div className="container relative z-10 mx-auto px-6 h-full flex flex-col justify-center items-start pt-20">
+              <motion.div
+                initial={{ y: 50, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.5, duration: 0.8, ease: "easeOut" }}
+                className="max-w-3xl"
+              >
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-border/50 dark:border-white/20 bg-background/50 dark:bg-white/5 backdrop-blur-md mb-6">
+                  <Sparkles className="h-4 w-4 text-primary dark:text-electric-blue" />
+                  <span className="text-sm font-semibold tracking-widest uppercase text-foreground/80 dark:text-metallic-silver">Next-Gen Technology</span>
+                </div>
+                <h1 className="text-6xl md:text-8xl font-black tracking-tighter text-foreground dark:text-white mb-6 leading-[1.1] dark:drop-shadow-[0_0_40px_rgba(255,255,255,0.2)]">
+                  {heroSlides[currentSlide].title}
+                </h1>
+                <p className="text-xl md:text-2xl text-foreground/70 dark:text-metallic-silver mb-10 font-medium max-w-2xl leading-relaxed">
+                  {heroSlides[currentSlide].subtitle}
+                </p>
+                <Link href="#explore" className={buttonVariants({ size: "lg", className: "rounded-full px-10 h-16 text-lg font-bold bg-gradient-to-r from-primary to-primary/80 dark:from-electric-blue dark:to-premium-violet text-primary-foreground dark:text-white border-0 dark:shadow-[0_0_40px_rgba(100,50,255,0.4)] transition-all hover:scale-105" })}>
+                  Explore Collection <ArrowRight className="ml-3 h-6 w-6" />
+                </Link>
+              </motion.div>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+        
+        {/* Animated grid overlay - Visible in both modes but tailored */}
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.03)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:100px_100px] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none"></div>
       </section>
 
-      {/* Featured Products */}
-      <section id="trending" className="py-16 bg-muted/30">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-3xl font-bold tracking-tight">Trending Laptops</h2>
-            <Link href="#trending" className="text-primary hover:underline font-medium flex items-center">
-              View all <ArrowRight className="ml-1 h-4 w-4" />
-            </Link>
+      {/* 2. Personalized Recommendations */}
+      <section id="explore" className="py-24 relative overflow-hidden bg-gradient-to-b from-primary/10 to-background dark:from-deep-black dark:to-card/20">
+        <div className="container relative mx-auto px-6 z-10">
+          <div className="flex items-center gap-4 mb-16">
+            <div className="p-4 bg-primary/10 dark:bg-electric-blue/20 rounded-2xl border border-primary/20 dark:border-electric-blue/30 text-primary dark:text-electric-blue dark:shadow-[0_0_30px_rgba(0,100,255,0.2)]">
+              <Sparkles className="h-8 w-8" />
+            </div>
+            <div>
+              <h2 className="text-4xl font-black tracking-tight text-foreground dark:text-white drop-shadow-sm dark:drop-shadow-md">For You</h2>
+              <p className="text-muted-foreground dark:text-metallic-silver font-medium mt-1">
+                {myOrders.length > 0 
+                  ? "Curated recommendations based on your purchase history."
+                  : "Hand-picked flagship models to elevate your experience."}
+              </p>
+            </div>
           </div>
           
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-            </div>
-          ) : error ? (
-            <div className="text-center text-destructive py-12">
-              Failed to load laptops. Please try again.
-            </div>
-          ) : laptops.length === 0 ? (
-            <div className="text-center text-muted-foreground py-12">
-              <Package className="h-12 w-12 mx-auto mb-4 opacity-20" />
-              <p>No laptops currently available in the marketplace.</p>
-              <p className="text-sm mt-2">Admins must approve seller listings before they appear here.</p>
+          {loading || ordersLoading ? (
+            <div className="flex justify-center py-20">
+              <div className="h-12 w-12 animate-spin rounded-full border-4 border-electric-blue border-t-transparent"></div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {laptops.map((laptop: any, index: number) => {
-                const isDiscounted = laptop.discountPercent > 0;
-                const salePrice = isDiscounted ? laptop.price * (1 - laptop.discountPercent / 100) : laptop.price;
-                const imageUrl = laptop.images && laptop.images.length > 0 ? laptop.images[0] : "https://images.unsplash.com/photo-1593642632823-8f785ba67e45?q=80&w=1000&auto=format&fit=crop";
-
-                return (
-                  <motion.div
-                    key={laptop.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.4, delay: index * 0.1 }}
-                    className="group relative rounded-2xl border bg-card p-4 transition-all hover:shadow-xl dark:hover:shadow-primary/5 flex flex-col"
-                  >
-                    <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-muted mb-4">
-                      <Image
-                        src={imageUrl}
-                        alt={laptop.name}
-                        fill
-                        className="object-cover transition-transform duration-300 group-hover:scale-105"
-                      />
-                      <button 
-                        onClick={() => handleWishlistToggle(laptop.id)}
-                        className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:scale-110 active:scale-95"
-                      >
-                        <Heart 
-                          className={`h-4 w-4 transition-colors ${
-                            wishlistIds.includes(laptop.id) 
-                              ? "fill-red-500 text-red-500" 
-                              : "text-muted-foreground hover:text-red-500"
-                          }`} 
-                        />
-                      </button>
-                      {isDiscounted && (
-                        <div className="absolute top-2 left-2 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded">
-                          {laptop.discountPercent}% OFF
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 flex flex-col">
-                      <div className="text-xs font-semibold text-primary mb-1 uppercase tracking-wider">{laptop.brand}</div>
-                      <h3 className="font-semibold text-lg line-clamp-1">{laptop.name}</h3>
-                      <p className="text-sm text-muted-foreground mb-4 line-clamp-2 mt-1">
-                        {laptop.processor} • {laptop.ram} • {laptop.storage}
-                      </p>
-                      <div className="mt-auto flex items-end justify-between pt-2">
-                        <div className="flex flex-col">
-                          {isDiscounted && (
-                            <span className="text-xs text-muted-foreground line-through">
-                              ₹{laptop.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                            </span>
-                          )}
-                          <span className="font-bold text-lg text-primary">
-                            ₹{salePrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                        <Button size="sm" className="rounded-full">Add to Cart</Button>
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
+              {recommendations.map((laptop, i) => renderProductCard(laptop, i))}
             </div>
           )}
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="py-24 bg-background">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-16">
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Why Choose Lap Mart?</h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              We provide the best platform for buying and selling premium laptops with guaranteed security and support.
-            </p>
+      {/* 3. New Arrivals (Luxury Grid) */}
+      <section className="py-24 bg-primary/5 dark:bg-card/20 border-y border-primary/10 dark:border-white/5 relative">
+        <div className="absolute inset-0 opacity-30 dark:opacity-0 bg-[radial-gradient(circle_at_bottom_left,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent pointer-events-none"></div>
+        <div className="container relative mx-auto px-6 z-10">
+          <div className="flex items-end justify-between mb-16">
+            <div>
+              <h2 className="text-4xl font-black tracking-tight mb-4 text-foreground">Latest Innovations</h2>
+              <p className="text-muted-foreground dark:text-metallic-silver text-lg">The newest flagship models just hit the platform.</p>
+            </div>
+            <Link href="/search" className="text-primary dark:text-electric-blue hover:text-primary/80 dark:hover:text-white font-bold tracking-widest uppercase text-sm flex items-center transition-colors">
+              View All <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {features.map((feature, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, scale: 0.95 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                className="flex flex-col items-center text-center p-6 rounded-2xl border bg-card hover:bg-muted/50 transition-colors"
-              >
-                <div className="p-4 rounded-full bg-primary/10 mb-4">
-                  {feature.icon}
-                </div>
-                <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
-                <p className="text-muted-foreground">{feature.description}</p>
-              </motion.div>
-            ))}
-          </div>
+          {loading ? (
+            <div className="flex justify-center py-20">
+              <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary dark:border-electric-blue border-t-transparent"></div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
+              {newArrivals.map((laptop, i) => renderProductCard(laptop, i))}
+            </div>
+          )}
         </div>
       </section>
+
+      {/* 4. Flash Deals */}
+      {discountedLaptops.length > 0 && (
+        <section className="py-24 relative bg-background dark:bg-transparent">
+          <div className="absolute inset-0 bg-gradient-to-b from-orange-500/5 to-transparent pointer-events-none" />
+          <div className="absolute inset-0 opacity-20 dark:opacity-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-orange-500/20 via-transparent to-transparent pointer-events-none"></div>
+          <div className="container relative mx-auto px-6 z-10">
+            <div className="flex items-center gap-4 mb-16">
+              <div className="p-4 bg-orange-100 dark:bg-orange-500/20 rounded-2xl border border-orange-200 dark:border-orange-500/30 text-orange-600 dark:text-orange-500 dark:shadow-[0_0_30px_rgba(249,115,22,0.2)]">
+                <Flame className="h-8 w-8" />
+              </div>
+              <div>
+                <h2 className="text-4xl font-black tracking-tight text-foreground dark:text-white drop-shadow-sm dark:drop-shadow-md">Exclusive Offers</h2>
+                <p className="text-orange-600/80 dark:text-orange-200/60 font-medium mt-1">Limited time pricing on premium models.</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
+              {discountedLaptops.map((laptop, i) => renderProductCard(laptop, i, true))}
+            </div>
+          </div>
+        </section>
+      )}
+
     </div>
   );
 }

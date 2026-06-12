@@ -3,6 +3,7 @@
 import { useQuery, useMutation, gql } from "@apollo/client";
 import { Trash2, Shield, User as UserIcon, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const GET_ALL_USERS = gql`
   query GetAllUsers {
@@ -38,7 +39,7 @@ export default function AdminUsersPage() {
       await deleteUser({ variables: { id } });
       refetch();
     } catch (err: any) {
-      alert("Failed to delete user: " + err.message);
+      toast.error("Failed to delete user: " + err.message);
     }
   };
 

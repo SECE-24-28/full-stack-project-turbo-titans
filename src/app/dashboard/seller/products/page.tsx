@@ -8,6 +8,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 
 const GET_MY_PRODUCTS = gql`
   query GetMyProducts {
@@ -97,7 +98,7 @@ export default function MyProductsPage() {
       refetch();
     } catch (err) {
       console.error(err);
-      alert("Failed to update product");
+      toast.error("Failed to update product");
     }
   };
 
@@ -109,7 +110,7 @@ export default function MyProductsPage() {
       refetch();
     } catch (err) {
       console.error(err);
-      alert("Failed to delete product");
+      toast.error("Failed to delete product");
     } finally {
       setIsDeleting(null);
     }

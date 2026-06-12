@@ -3,11 +3,15 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { signToken, setAuthCookie, clearAuthCookie } from '../lib/auth';
 import { sendPasswordResetEmail } from '../lib/email';
+import { SearchService } from '../services/search.service';
 
 const ADMIN_EMAIL = 'dwarkeshrm707@gmail.com';
 
 export const resolvers = {
   Query: {
+    searchProducts: async (_: any, args: any) => {
+      return await SearchService.searchProducts(args);
+    },
     me: async (_: any, __: any, context: any) => {
       if (!context.user) return null;
       return await prisma.user.findUnique({ where: { id: context.user.id } });
@@ -61,11 +65,46 @@ export const resolvers = {
         }
       }
 
+      // Calculate monthly revenue for the current year
+      const currentYear = new Date().getFullYear();
+      const monthlyRevenueMap: Record<string, number> = {
+        Jan: 0, Feb: 0, Mar: 0, Apr: 0, May: 0, Jun: 0,
+        Jul: 0, Aug: 0, Sep: 0, Oct: 0, Nov: 0, Dec: 0
+      };
+      const monthlyOrdersMap: Record<string, number> = {
+        Jan: 0, Feb: 0, Mar: 0, Apr: 0, May: 0, Jun: 0,
+        Jul: 0, Aug: 0, Sep: 0, Oct: 0, Nov: 0, Dec: 0
+      };
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+      orderItems.forEach(item => {
+        let itemDate;
+        if (typeof item.createdAt === "string") {
+          // If it's a string, it might be a timestamp string like "1718182054000"
+          itemDate = new Date(isNaN(Number(item.createdAt)) ? item.createdAt : Number(item.createdAt));
+        } else {
+          itemDate = new Date(item.createdAt);
+        }
+
+        if (itemDate.getFullYear() === currentYear) {
+          const monthStr = monthNames[itemDate.getMonth()];
+          monthlyRevenueMap[monthStr] += (item.priceAtTime * item.quantity);
+          monthlyOrdersMap[monthStr] += item.quantity; // Summing up the quantity of items sold
+        }
+      });
+
+      const monthlyRevenue = monthNames.map(name => ({
+        name,
+        total: monthlyRevenueMap[name],
+        orders: monthlyOrdersMap[name]
+      }));
+
       return {
         totalRevenue,
         salesLast30Days,
         totalOrders: orderItems.length,
-        topModel
+        topModel,
+        monthlyRevenue
       };
     },
     getPublicProducts: async () => {
@@ -76,7 +115,7 @@ export const resolvers = {
       });
     },
     getWishlist: async (_: any, __: any, context: any) => {
-      if (!context.user) throw new Error("Not authenticated");
+      if (!context.user) return [];
       const wishlistItems = await prisma.wishlistItem.findMany({
         where: { userId: context.user.id },
         include: { product: true }
@@ -90,7 +129,7 @@ export const resolvers = {
       });
     },
     getCart: async (_: any, __: any, context: any) => {
-      if (!context.user) throw new Error("Not authenticated");
+      if (!context.user) return [];
       return await prisma.cartItem.findMany({
         where: { userId: context.user.id },
         include: { product: true },
@@ -104,8 +143,43 @@ export const resolvers = {
       const totalSellers = await prisma.user.count({ where: { role: 'SELLER' } });
       const pendingApprovals = await prisma.product.count({ where: { status: 'PENDING' } });
       
-      const orders = await prisma.order.findMany();
+      const orders = await prisma.order.findMany({
+        include: { items: true }
+      });
       const totalRevenue = orders.reduce((acc, order) => acc + order.totalAmount, 0);
+
+      // Calculate monthly revenue for the current year
+      const currentYear = new Date().getFullYear();
+      const monthlyRevenueMap: Record<string, number> = {
+        Jan: 0, Feb: 0, Mar: 0, Apr: 0, May: 0, Jun: 0,
+        Jul: 0, Aug: 0, Sep: 0, Oct: 0, Nov: 0, Dec: 0
+      };
+      const monthlyOrdersMap: Record<string, number> = {
+        Jan: 0, Feb: 0, Mar: 0, Apr: 0, May: 0, Jun: 0,
+        Jul: 0, Aug: 0, Sep: 0, Oct: 0, Nov: 0, Dec: 0
+      };
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+      orders.forEach(order => {
+        let orderDate;
+        if (typeof order.createdAt === "string") {
+          orderDate = new Date(isNaN(Number(order.createdAt)) ? order.createdAt : Number(order.createdAt));
+        } else {
+          orderDate = new Date(order.createdAt);
+        }
+
+        if (orderDate.getFullYear() === currentYear) {
+          const monthStr = monthNames[orderDate.getMonth()];
+          monthlyRevenueMap[monthStr] += order.totalAmount;
+          monthlyOrdersMap[monthStr] += 1; // Count each order as 1 order for admin
+        }
+      });
+
+      const monthlyRevenue = monthNames.map(name => ({
+        name,
+        total: monthlyRevenueMap[name],
+        orders: monthlyOrdersMap[name]
+      }));
       
       // Fetch recent things for activity feed
       const recentUsers = await prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: 3 });
@@ -125,7 +199,8 @@ export const resolvers = {
         activeUsers: totalUsers,
         activeSellers: totalSellers,
         pendingApprovals,
-        recentActivity: activity.slice(0, 6)
+        recentActivity: activity.slice(0, 6),
+        monthlyRevenue
       };
     },
     getSystemLogs: async (_: any, __: any, context: any) => {
@@ -153,9 +228,101 @@ export const resolvers = {
         orderBy: { createdAt: 'desc' }
       });
     },
+    getLiveInventory: async (_: any, __: any, context: any) => {
+      if (!context.user || context.user.role !== 'ADMIN') throw new Error("Unauthorized");
+      return await prisma.product.findMany({
+        where: { status: 'APPROVED' },
+        include: { seller: true },
+        orderBy: { createdAt: 'desc' }
+      });
+    },
     getAllUsers: async (_: any, __: any, context: any) => {
       if (!context.user || context.user.role !== 'ADMIN') throw new Error("Unauthorized");
       return await prisma.user.findMany({
+        orderBy: { createdAt: 'desc' }
+      });
+    },
+    getSellerOrders: async (_: any, __: any, context: any) => {
+      if (!context.user || context.user.role !== 'SELLER') {
+        throw new Error("Not authorized as a seller");
+      }
+      
+      // Fetch all order items belonging to this seller
+      return await prisma.orderItem.findMany({
+        where: { sellerId: context.user.id },
+        include: {
+          product: true,
+          order: {
+            include: { buyer: true }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+    },
+    getMyOrders: async (_: any, __: any, context: any) => {
+      if (!context.user) return [];
+      
+      // JIT update for demo: if delivery time passed, set to DELIVERED
+      await prisma.order.updateMany({
+        where: {
+          buyerId: context.user.id,
+          status: 'PENDING',
+          estimatedDeliveryAt: { lte: new Date() }
+        },
+        data: { status: 'DELIVERED' }
+      });
+
+      return await prisma.order.findMany({
+        where: { buyerId: context.user.id },
+        include: { 
+          items: {
+            include: { product: true }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+    },
+    getOrder: async (_: any, { id }: any, context: any) => {
+      if (!context.user) throw new Error("Unauthorized");
+      
+      const order = await prisma.order.findUnique({
+        where: { id },
+        include: {
+          buyer: true,
+          items: {
+            include: { product: true }
+          }
+        }
+      });
+      
+      if (!order) throw new Error("Order not found");
+      
+      // Ensure the user is either the buyer or an admin
+      if (order.buyerId !== context.user.id && context.user.role !== 'ADMIN') {
+        throw new Error("Unauthorized");
+      }
+      
+      return order;
+    },
+    getAllOrders: async (_: any, __: any, context: any) => {
+      if (!context.user || context.user.role !== 'ADMIN') throw new Error("Unauthorized");
+      
+      // JIT update for demo
+      await prisma.order.updateMany({
+        where: {
+          status: 'PENDING',
+          estimatedDeliveryAt: { lte: new Date() }
+        },
+        data: { status: 'DELIVERED' }
+      });
+
+      return await prisma.order.findMany({
+        include: { 
+          buyer: true,
+          items: {
+            include: { product: true }
+          }
+        },
         orderBy: { createdAt: 'desc' }
       });
     }
@@ -234,15 +401,19 @@ export const resolvers = {
 
       return true;
     },
-    updateProfile: async (_: any, { name, email }: any, context: any) => {
+    updateProfile: async (_: any, { name, email, phone, address, zipCode }: any, context: any) => {
       if (!context.user) throw new Error('Not authenticated');
 
       const data: any = {};
-      if (name) data.name = name;
+      if (name !== undefined) data.name = name;
+      if (phone !== undefined) data.phone = phone;
+      if (address !== undefined) data.address = address;
+      if (zipCode !== undefined) data.zipCode = zipCode;
+      
       if (email) {
         const existingUser = await prisma.user.findUnique({ where: { email } });
         if (existingUser && existingUser.id !== context.user.id) {
-          throw new Error('Email already in use by another account');
+          throw new Error('Email already in use');
         }
         data.email = email;
       }
@@ -427,6 +598,16 @@ export const resolvers = {
         data: { status }
       });
     },
+    updateOrderStatus: async (_: any, { id, status }: { id: string, status: any }, context: any) => {
+      if (!context.user) throw new Error("Unauthorized");
+      if (context.user.role !== 'ADMIN' && context.user.role !== 'SELLER') {
+        throw new Error("Unauthorized: Only Admins or Sellers can update order status.");
+      }
+      return await prisma.order.update({
+        where: { id },
+        data: { status }
+      });
+    },
     deleteUser: async (_: any, { id }: { id: string }, context: any) => {
       if (!context.user || context.user.role !== 'ADMIN') throw new Error("Unauthorized");
       // Prevent deleting yourself
@@ -434,6 +615,143 @@ export const resolvers = {
       
       await prisma.user.delete({ where: { id } });
       return true;
+    },
+    addReview: async (_: any, { productId, rating, comment }: { productId: string, rating: number, comment?: string }, context: any) => {
+      if (!context.user) throw new Error("Not authenticated");
+      
+      // Upsert the review (create if not exists, update if exists)
+      return await prisma.review.upsert({
+        where: {
+          userId_productId: {
+            userId: context.user.id,
+            productId
+          }
+        },
+        update: {
+          rating,
+          comment
+        },
+        create: {
+          userId: context.user.id,
+          productId,
+          rating,
+          comment
+        },
+        include: {
+          user: true,
+          product: true
+        }
+      });
+    },
+    deleteReview: async (_: any, { productId }: { productId: string }, context: any) => {
+      if (!context.user) throw new Error("Not authenticated");
+      
+      try {
+        await prisma.review.delete({
+          where: {
+            userId_productId: {
+              userId: context.user.id,
+              productId
+            }
+          }
+        });
+        return true;
+      } catch (e) {
+        throw new Error("Review not found or you don't have permission to delete it.");
+      }
+    },
+    checkout: async (_: any, args: { address: string, city: string, zipCode: string, phone: string }, context: any) => {
+      if (!context.user) throw new Error("Not authenticated");
+      const userId = context.user.id;
+
+      // 1. Get cart items
+      const cartItems = await prisma.cartItem.findMany({
+        where: { userId },
+        include: { product: true }
+      });
+
+      if (cartItems.length === 0) {
+        throw new Error("Cart is empty");
+      }
+
+      // 2. Calculate total
+      let subtotal = 0;
+      for (const item of cartItems) {
+        const p = item.product;
+        const isDiscounted = p.discountPercent > 0;
+        const price = isDiscounted ? p.price * (1 - p.discountPercent / 100) : p.price;
+        subtotal += price * item.quantity;
+      }
+      const tax = subtotal * 0.08;
+      const totalAmount = subtotal + tax;
+
+      // Calculate estimated delivery: if city length is even, 2 mins. If odd, 5 mins.
+      const deliveryMins = args.city.length % 2 === 0 ? 2 : 5;
+      const estimatedDeliveryAt = new Date(Date.now() + deliveryMins * 60000);
+
+      // 3. Create Order and OrderItems in a transaction
+      const order = await prisma.$transaction(async (tx) => {
+        const newOrder = await tx.order.create({
+          data: {
+            buyerId: userId,
+            totalAmount,
+            status: "PENDING",
+            estimatedDeliveryAt,
+            // Note: Schema doesn't currently store address/phone directly on order, but typically we'd add fields or store it.
+            // For now, we proceed as the schema defines it.
+            items: {
+              create: cartItems.map(item => {
+                const p = item.product;
+                const isDiscounted = p.discountPercent > 0;
+                const priceAtTime = isDiscounted ? p.price * (1 - p.discountPercent / 100) : p.price;
+                return {
+                  productId: item.productId,
+                  sellerId: p.sellerId,
+                  quantity: item.quantity,
+                  priceAtTime,
+                };
+              })
+            }
+          }
+        });
+
+        // 4. Update stock and clear cart
+        for (const item of cartItems) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stock: { decrement: item.quantity } }
+          });
+        }
+
+        await tx.cartItem.deleteMany({
+          where: { userId }
+        });
+
+        return newOrder;
+      });
+
+      return order.id;
+    }
+  },
+  Product: {
+    reviews: async (parent: any) => {
+      return await prisma.review.findMany({
+        where: { productId: parent.id },
+        include: { user: true },
+        orderBy: { createdAt: 'desc' }
+      });
+    },
+    averageRating: async (parent: any) => {
+      const result = await prisma.review.aggregate({
+        where: { productId: parent.id },
+        _avg: { rating: true }
+      });
+      return result._avg.rating || 0;
+    },
+    reviewCount: async (parent: any) => {
+      return await prisma.review.count({
+        where: { productId: parent.id }
+      });
     }
   }
 };

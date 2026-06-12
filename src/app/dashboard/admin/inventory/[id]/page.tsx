@@ -4,7 +4,7 @@ import { useQuery, useMutation, gql } from "@apollo/client";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { Check, X, ArrowLeft, Info, Calendar, Shield, Cpu, HardDrive, Monitor, Battery, Box } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Info, Shield, Cpu, HardDrive, Monitor, Battery, Box, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -49,25 +49,38 @@ const UPDATE_PRODUCT_STATUS = gql`
   }
 `;
 
-export default function AdminApprovalDetailsPage() {
+export default function AdminInventoryDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
 
-  const { data, loading, error } = useQuery(GET_PRODUCT, {
+  const { data, loading, error, refetch } = useQuery(GET_PRODUCT, {
     variables: { id },
     fetchPolicy: "network-only"
   });
 
   const [updateStatus] = useMutation(UPDATE_PRODUCT_STATUS);
 
-  const handleStatusChange = async (status: string) => {
+  const handleDelist = async () => {
+    if (!confirm(`Are you sure you want to forcefully delist this laptop? It will instantly be removed from the public storefront.`)) {
+      return;
+    }
     try {
-      await updateStatus({ variables: { id, status } });
-      toast.success(`Product ${status.toLowerCase()} successfully!`);
-      router.push("/dashboard/admin/approvals");
+      await updateStatus({ variables: { id, status: "REJECTED" } });
+      toast.success("Product successfully delisted.");
+      refetch(); // Refetch to show the updated status
     } catch (err: any) {
-      toast.error("Failed to update status: " + err.message);
+      toast.error("Failed to delist product: " + err.message);
+    }
+  };
+
+  const handleRestore = async () => {
+    try {
+      await updateStatus({ variables: { id, status: "APPROVED" } });
+      toast.success("Product successfully restored to the live marketplace.");
+      refetch();
+    } catch (err: any) {
+      toast.error("Failed to restore product: " + err.message);
     }
   };
 
@@ -82,14 +95,12 @@ export default function AdminApprovalDetailsPage() {
   if (error || !data?.getProduct) {
     return (
       <div className="space-y-4">
-        <div>
-          <Link href="/dashboard/admin/approvals" className="inline-block mb-4">
-            <Button variant="ghost">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Approvals
-            </Button>
-          </Link>
-        </div>
+        <Link href="/dashboard/admin/inventory" className="inline-block mb-4">
+          <Button variant="ghost">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Inventory
+          </Button>
+        </Link>
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
           Error loading product: {error?.message || "Product not found"}
         </div>
@@ -98,6 +109,7 @@ export default function AdminApprovalDetailsPage() {
   }
 
   const product = data.getProduct;
+  const isDelisted = product.status !== "APPROVED";
 
   return (
     <div className="space-y-8 pb-12">
@@ -106,16 +118,26 @@ export default function AdminApprovalDetailsPage() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Review Listing</h1>
-          <p className="text-muted-foreground text-sm">Please verify the details before publishing to the live marketplace.</p>
+          <h1 className="text-2xl font-bold tracking-tight">Live Inventory Details</h1>
+          <p className="text-muted-foreground text-sm">Review full product specifications and manage marketplace visibility.</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column - Images & Actions */}
         <div className="lg:col-span-1 space-y-6">
-          <div className="rounded-2xl border bg-card overflow-hidden shadow-sm">
-            <div className="relative h-64 w-full bg-muted">
+          <div className="rounded-2xl border bg-card overflow-hidden shadow-sm relative">
+            {isDelisted ? (
+               <div className="absolute top-2 right-2 z-10 px-2.5 py-1 rounded-full bg-red-500 text-white text-[10px] font-bold uppercase tracking-wider shadow-sm">
+                 Delisted
+               </div>
+            ) : (
+               <div className="absolute top-2 right-2 z-10 px-2.5 py-1 rounded-full bg-green-500 text-white text-[10px] font-bold uppercase tracking-wider shadow-sm">
+                 Live Status
+               </div>
+            )}
+
+            <div className={`relative h-64 w-full bg-muted ${isDelisted ? 'grayscale opacity-75' : ''}`}>
               <Image
                 src={product.images && product.images.length > 0 ? product.images[0] : "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?q=80&w=1000&auto=format&fit=crop"}
                 alt={product.name}
@@ -127,7 +149,7 @@ export default function AdminApprovalDetailsPage() {
             {product.images && product.images.length > 1 && (
               <div className="flex gap-2 overflow-x-auto p-4 border-t bg-muted/10">
                 {product.images.slice(1).map((img: string, i: number) => (
-                  <div key={i} className="relative h-16 w-16 shrink-0 rounded-md overflow-hidden bg-muted border">
+                  <div key={i} className={`relative h-16 w-16 shrink-0 rounded-md overflow-hidden bg-muted border ${isDelisted ? 'grayscale opacity-75' : ''}`}>
                     <Image src={img} alt={`Thumbnail ${i+1}`} fill className="object-cover" />
                   </div>
                 ))}
@@ -135,30 +157,41 @@ export default function AdminApprovalDetailsPage() {
             )}
           </div>
 
-          <div className="rounded-2xl border bg-card p-6 shadow-sm space-y-4">
+          <div className={`rounded-2xl border bg-card p-6 shadow-sm space-y-4 ${isDelisted ? 'border-red-200 bg-red-50 dark:bg-red-900/10' : ''}`}>
             <h3 className="font-semibold text-lg flex items-center gap-2">
               <Shield className="h-5 w-5 text-primary" />
               Admin Actions
             </h3>
             
             <div className="space-y-3 pt-2">
-              <Button 
-                onClick={() => handleStatusChange("APPROVED")}
-                className="w-full bg-green-600 hover:bg-green-700 text-white gap-2 h-12 text-md"
-                disabled={product.status === "APPROVED"}
-              >
-                <Check className="h-5 w-5" />
-                {product.status === "APPROVED" ? "Already Approved" : "Approve & Publish"}
-              </Button>
-              <Button 
-                onClick={() => handleStatusChange("REJECTED")}
-                variant="outline" 
-                className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/10 gap-2 border-red-200 dark:border-red-900/30 h-12 text-md"
-                disabled={product.status === "REJECTED"}
-              >
-                <X className="h-5 w-5" />
-                Reject Listing
-              </Button>
+              {isDelisted ? (
+                <>
+                  <p className="text-sm text-red-600 dark:text-red-400 font-medium pb-2">
+                    This item is currently hidden from the public marketplace.
+                  </p>
+                  <Button 
+                    onClick={handleRestore}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white gap-2 h-12 text-md"
+                  >
+                    <CheckCircle className="h-5 w-5" />
+                    Restore to Marketplace
+                  </Button>
+                </>
+              ) : (
+                <>
+                   <p className="text-sm text-muted-foreground pb-2">
+                     Use this to forcefully hide the listing if it violates platform guidelines.
+                   </p>
+                   <Button 
+                    onClick={handleDelist}
+                    variant="destructive" 
+                    className="w-full gap-2 bg-red-600 hover:bg-red-700 h-12 text-md"
+                  >
+                    <AlertTriangle className="h-5 w-5" />
+                    Force Delist Listing
+                  </Button>
+                </>
+              )}
             </div>
           </div>
           
@@ -169,19 +202,19 @@ export default function AdminApprovalDetailsPage() {
              </h3>
              <ul className="space-y-3 text-sm">
                <li className="flex justify-between items-center py-1 border-b">
-                 <span className="text-muted-foreground">Submitted By</span>
+                 <span className="text-muted-foreground">Seller</span>
                  <span className="font-medium text-right">{product.seller.name}<br/><span className="text-xs text-muted-foreground">{product.seller.email}</span></span>
                </li>
                <li className="flex justify-between items-center py-1 border-b">
-                 <span className="text-muted-foreground">Date Submitted</span>
+                 <span className="text-muted-foreground">Date Listed</span>
                  <span className="font-medium">{new Date(parseInt(product.createdAt)).toLocaleDateString()}</span>
                </li>
                <li className="flex justify-between items-center py-1 border-b">
-                 <span className="text-muted-foreground">Requested Price</span>
+                 <span className="text-muted-foreground">Current Price</span>
                  <span className="font-bold text-primary text-lg">₹{product.price.toLocaleString('en-IN')}</span>
                </li>
                <li className="flex justify-between items-center py-1">
-                 <span className="text-muted-foreground">Inventory Stock</span>
+                 <span className="text-muted-foreground">Remaining Stock</span>
                  <span className="font-medium">{product.stock} Units</span>
                </li>
              </ul>

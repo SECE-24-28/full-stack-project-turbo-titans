@@ -11,6 +11,11 @@ const GET_SELLER_ANALYTICS = gql`
       salesLast30Days
       totalOrders
       topModel
+      monthlyRevenue {
+        name
+        total
+        orders
+      }
     }
   }
 `;
@@ -90,7 +95,7 @@ export default function AnalyticsPage() {
 
       <div className="rounded-xl border bg-card p-6 shadow-sm">
         <h3 className="text-lg font-bold mb-6">Revenue Overview (Year)</h3>
-        <SalesChart />
+        <SalesChart data={analytics?.monthlyRevenue || []} />
       </div>
 
     </div>

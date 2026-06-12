@@ -6,6 +6,7 @@ import { useQuery, useMutation, gql } from "@apollo/client";
 import { Trash2, Plus, Minus, ArrowRight, ShoppingBag, ShoppingCart } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { toast } from "sonner";
 
 const GET_CART = gql`
   query GetCart {
@@ -55,7 +56,7 @@ export default function CartPage() {
       await removeFromCart({ variables: { productId } });
       refetch();
     } catch (err: any) {
-      alert("Failed to remove item.");
+      toast.error("Failed to remove item.");
     }
   };
 
@@ -67,7 +68,7 @@ export default function CartPage() {
       await updateCartQuantity({ variables: { productId, quantity: newQuantity } });
       refetch();
     } catch (err: any) {
-      alert("Failed to update quantity.");
+      toast.error("Failed to update quantity.");
     }
   };
 
@@ -234,9 +235,11 @@ export default function CartPage() {
                 </div>
               </div>
 
-              <Button size="lg" className="w-full mt-8 rounded-full text-lg h-14 group">
-                Checkout <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
-              </Button>
+              <Link href="/checkout" className="w-full">
+                <Button size="lg" className="w-full mt-8 rounded-full text-lg h-14 group">
+                  Checkout <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+                </Button>
+              </Link>
               
               <p className="text-xs text-center text-muted-foreground mt-6">
                 Secure checkout. 30-day money-back guarantee.

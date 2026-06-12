@@ -3,19 +3,27 @@
 import { useQuery, gql } from "@apollo/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
+import { SalesChart } from "@/components/seller/SalesChart";
 
-const GET_ALL_USERS = gql`
-  query GetAllUsers {
+const GET_ADMIN_ANALYTICS_DATA = gql`
+  query GetAdminAnalyticsData {
     getAllUsers {
       id
       role
       createdAt
     }
+    getAdminAnalytics {
+      monthlyRevenue {
+        name
+        total
+        orders
+      }
+    }
   }
 `;
 
 export default function AdminAnalyticsPage() {
-  const { data, loading, error } = useQuery(GET_ALL_USERS, {
+  const { data, loading, error } = useQuery(GET_ADMIN_ANALYTICS_DATA, {
     fetchPolicy: "network-only"
   });
 
@@ -36,12 +44,13 @@ export default function AdminAnalyticsPage() {
   }
 
   const users = data?.getAllUsers || [];
+  const monthlyRevenue = data?.getAdminAnalytics?.monthlyRevenue || [];
 
   // Group users by month
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   
   // Initialize data array with 0s for the last 6 months including current
-  const chartData = [];
+  const chartData: any[] = [];
   const currentDate = new Date();
   
   for (let i = 5; i >= 0; i--) {
@@ -81,6 +90,15 @@ export default function AdminAnalyticsPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Platform Revenue (Yearly)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SalesChart data={monthlyRevenue} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>User Growth (Last 6 Months)</CardTitle>
         </CardHeader>
         <CardContent>
@@ -88,15 +106,15 @@ export default function AdminAnalyticsPage() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+                <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
                 <Tooltip 
-                  cursor={{fill: 'hsl(var(--muted))'}} 
+                  cursor={{fill: 'var(--accent)'}} 
                   contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "8px" }} 
                 />
                 <Legend />
-                <Bar dataKey="buyers" name="New Buyers" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="sellers" name="New Sellers" fill="hsl(var(--secondary))" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="buyers" name="New Buyers" fill="currentColor" className="fill-primary" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="sellers" name="New Sellers" fill="currentColor" className="fill-secondary" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

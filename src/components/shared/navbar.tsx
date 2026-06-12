@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Laptop, Search, ShoppingCart, Heart, User, UserIcon } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -44,8 +45,30 @@ const LOGOUT_MUTATION = gql`
   }
 `;
 
+const SEARCH_PRODUCTS = gql`
+  query SearchProducts($q: String) {
+    searchProducts(q: $q) {
+      id
+      name
+      price
+      processor
+      ram
+      images
+    }
+  }
+`;
+
 export function Navbar() {
   const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const { data: searchData, loading: searchLoading } = useQuery(SEARCH_PRODUCTS, {
+    variables: { q: searchQuery.trim() },
+    skip: searchQuery.trim().length < 2,
+    fetchPolicy: "network-only",
+  });
+
   const { data, loading, client } = useQuery(ME_QUERY, {
     fetchPolicy: 'network-only',
   });
@@ -85,15 +108,83 @@ export function Navbar() {
           </div>
 
           {/* Search Bar */}
-          <div className="hidden flex-1 max-w-md items-center md:flex">
-            <div className="relative w-full">
+          <div className="hidden flex-1 max-w-md items-center md:flex relative z-50">
+            <form 
+              className="relative w-full"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setShowSuggestions(false);
+                if (searchQuery.trim()) {
+                  router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+                }
+              }}
+            >
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
+                name="q"
                 type="search"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setShowSuggestions(true);
+                }}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => {
+                  // Delay hiding to allow clicks on suggestions
+                  setTimeout(() => setShowSuggestions(false), 200);
+                }}
+                autoComplete="off"
                 placeholder="Search for laptops..."
                 className="w-full rounded-full bg-muted/50 pl-9 pr-4 transition-colors focus-visible:bg-background"
               />
-            </div>
+            </form>
+
+            {/* Suggestions Dropdown */}
+            {showSuggestions && searchQuery.trim().length > 1 && (
+              <div className="absolute top-full left-0 right-0 mt-2 rounded-xl border bg-card shadow-lg overflow-hidden py-2 z-50 animate-in fade-in slide-in-from-top-2">
+                {searchLoading ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground">Searching...</div>
+                ) : searchData?.searchProducts?.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground">No laptops found for "{searchQuery}"</div>
+                ) : (
+                  <div className="max-h-[300px] overflow-y-auto">
+                    {searchData?.searchProducts?.slice(0, 5).map((product: any) => (
+                      <Link 
+                        key={product.id} 
+                        href={`/laptops/${product.id}`}
+                        onClick={() => setShowSuggestions(false)}
+                        className="flex items-center gap-3 px-4 py-2 hover:bg-muted transition-colors cursor-pointer"
+                      >
+                        <div className="h-10 w-10 shrink-0 overflow-hidden rounded bg-muted relative">
+                           {product.images && product.images.length > 0 ? (
+                             <img src={product.images[0]} alt={product.name} className="h-full w-full object-cover" />
+                           ) : (
+                             <Laptop className="h-full w-full p-2 text-muted-foreground" />
+                           )}
+                        </div>
+                        <div className="flex-1 overflow-hidden">
+                          <p className="truncate text-sm font-medium">{product.name}</p>
+                          <p className="truncate text-xs text-muted-foreground">{product.processor} • {product.ram}</p>
+                        </div>
+                        <div className="text-sm font-bold text-primary shrink-0">
+                          ₹{product.price.toLocaleString('en-IN')}
+                        </div>
+                      </Link>
+                    ))}
+                    
+                    {searchData?.searchProducts?.length > 5 && (
+                      <Link 
+                        href={`/search?q=${encodeURIComponent(searchQuery.trim())}`}
+                        onClick={() => setShowSuggestions(false)}
+                        className="block w-full text-center py-2 text-xs font-semibold text-primary hover:bg-muted mt-1 border-t"
+                      >
+                        View all {searchData.searchProducts.length} results
+                      </Link>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Actions */}
